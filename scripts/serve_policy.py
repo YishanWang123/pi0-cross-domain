@@ -9,7 +9,8 @@ from openpi.policies import policy as _policy
 from openpi.policies import policy_config as _policy_config
 from openpi.serving import websocket_policy_server
 from openpi.training import config as _config
-
+import os
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.2"
 
 class EnvMode(enum.Enum):
     """Supported environments."""
@@ -18,6 +19,7 @@ class EnvMode(enum.Enum):
     ALOHA_SIM = "aloha_sim"
     DROID = "droid"
     LIBERO = "libero"
+    ROBOMIMIC = "robomimic"
 
 
 @dataclasses.dataclass
@@ -69,9 +71,17 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_fast_droid",
         dir="gs://openpi-assets/checkpoints/pi0_fast_droid",
     ),
+    EnvMode.ROBOMIMIC: Checkpoint(
+        config="pi0_robomimic",
+        dir="/home/wzh/openpi/checkpoints/pi0_robomimic_5shot/robomimic_5shot/29999",
+    ),
+    # EnvMode.LIBERO: Checkpoint(
+    #     config="pi0_fast_libero",
+    #     dir="gs://openpi-assets/checkpoints/pi0_fast_libero",
+    # ),
     EnvMode.LIBERO: Checkpoint(
-        config="pi0_fast_libero",
-        dir="gs://openpi-assets/checkpoints/pi0_fast_libero",
+        config="pi0_libero",
+        dir="/home/wzh/openpi/checkpoints/pi0_libero130_1shot/libero130_1shot/20000",
     ),
 }
 

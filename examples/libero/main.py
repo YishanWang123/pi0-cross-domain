@@ -13,6 +13,10 @@ from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tqdm
 import tyro
+import json
+import datetime
+import pytz
+from typing import List, Optional
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
@@ -26,7 +30,7 @@ class Args:
     host: str = "0.0.0.0"
     port: int = 8000
     resize_size: int = 224
-    replan_steps: int = 5
+    replan_steps: int = 20
 
     #################################################################################################################
     # LIBERO environment-specific parameters
@@ -35,12 +39,13 @@ class Args:
         "libero_spatial"  # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
     )
     num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
-    num_trials_per_task: int = 50  # Number of rollouts per task
+    num_trials_per_task: int = 1  # Number of rollouts per task
+    only_task_ids: Optional[List[int]] = None  # << 新增
 
     #################################################################################################################
     # Utils
     #################################################################################################################
-    video_out_path: str = "data/libero/videos"  # Path to save videos
+    video_out_path: str = "data/libero/videos_20step_pick_id_50trials"  # Path to save videos
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -74,7 +79,16 @@ def eval_libero(args: Args) -> None:
 
     # Start evaluation
     total_episodes, total_successes = 0, 0
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
+    task_results = []  # 存储每个任务的结果
+
+    if args.only_task_ids:
+        task_id_iter = sorted({i for i in args.only_task_ids if 0 <= i < num_tasks_in_suite})
+    else:
+        task_id_iter = range(num_tasks_in_suite)
+
+    for task_id in tqdm.tqdm(task_id_iter):
+
+    # for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
         # Get task
         task = task_suite.get_task(task_id)
 
@@ -164,11 +178,16 @@ def eval_libero(args: Args) -> None:
             task_episodes += 1
             total_episodes += 1
 
+            suite_folder = pathlib.Path(args.video_out_path) / args.task_suite_name
+            suite_folder.mkdir(parents=True, exist_ok=True)
             # Save a replay video of the episode
             suffix = "success" if done else "failure"
             task_segment = task_description.replace(" ", "_")
+            tz_beijing = pytz.timezone('Asia/Shanghai')
+            time_str = datetime.datetime.now(tz_beijing).strftime("%Y%m%d_%H%M%S")
+            # video_path = suite_folder / video_filename
             imageio.mimwrite(
-                pathlib.Path(args.video_out_path) / f"rollout_{task_segment}_{suffix}.mp4",
+                pathlib.Path(suite_folder) / f"rollout_{task_segment}_{suffix}_{time_str}.mp4",
                 [np.asarray(x) for x in replay_images],
                 fps=10,
             )
@@ -179,11 +198,52 @@ def eval_libero(args: Args) -> None:
             logging.info(f"# successes: {total_successes} ({total_successes / total_episodes * 100:.1f}%)")
 
         # Log final results
-        logging.info(f"Current task success rate: {float(task_successes) / float(task_episodes)}")
-        logging.info(f"Current total success rate: {float(total_successes) / float(total_episodes)}")
+        logging.info(f" Current task success rate: {float(task_successes) / float(task_episodes)}")
+        logging.info(f" Current total success rate: {float(total_successes) / float(total_episodes)}")
+        # ✅ 在这里追加当前任务的结果
+        task_results.append({
+            "task_id": task_id,
+            "task_description": task_description,
+            "success_rate": float(task_successes) / float(task_episodes),
+            "episodes": task_episodes
+        })
 
-    logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
-    logging.info(f"Total episodes: {total_episodes}")
+    logging.info(f"[{args.task_suite_name}] Total success rate: {float(total_successes) / float(total_episodes)}")
+    logging.info(f"[{args.task_suite_name}] Total episodes: {total_episodes}")
+
+    # # === 新增 JSON 保存部分 ===
+    # result_data = {
+    #     "suite": args.task_suite_name,
+    #     "total_success_rate": float(total_successes) / float(total_episodes),
+    #     "total_episodes": total_episodes
+    # }
+    # output_path = pathlib.Path("results.json")
+    # if output_path.exists():
+    #     # 追加写入
+    #     existing = json.loads(output_path.read_text())
+    #     existing.append(result_data)
+    #     output_path.write_text(json.dumps(existing, indent=2))
+    # else:
+    #     output_path.write_text(json.dumps([result_data], indent=2))
+    # === 新增 JSON 保存部分 ===
+
+    result_data = {
+        "suite": args.task_suite_name,
+        "total_success_rate": float(total_successes) / float(total_episodes),
+        "total_episodes": total_episodes,
+        "tasks": task_results
+    }
+
+
+    output_path = pathlib.Path(f"results_{args.task_suite_name}_pick_ids.json")
+    if output_path.exists():
+        existing = json.loads(output_path.read_text())
+        # 防止同一个 suite 重复
+        existing = [r for r in existing if r["suite"] != args.task_suite_name]
+        existing.append(result_data)
+        output_path.write_text(json.dumps(existing, indent=2))
+    else:
+        output_path.write_text(json.dumps([result_data], indent=2))
 
 
 def _get_libero_env(task, resolution, seed):
