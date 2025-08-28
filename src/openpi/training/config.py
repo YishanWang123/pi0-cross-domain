@@ -338,7 +338,9 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
     
 @dataclasses.dataclass(frozen=True)
 class CoTrainLiberoDataConfig(LeRobotLiberoDataConfig):
-    repo_ids: str = "LIBERO130_1shot,ROBOMIMIC_10shot"
+    repo_id: str | None = None
+    repo_ids: list[str] = dataclasses.field(
+        default_factory=lambda: ["LIBERO130_1shot", "ROBOMIMIC_10shot"])
 
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -434,7 +436,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "/data0/pi0"
+    checkpoint_base_dir: str = "/mnt/ssd1/data/wys/pi0"
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -598,9 +600,12 @@ _CONFIGS = [
             repo_ids=["LIBERO130_1shot", "ROBOMIMIC_10shot"],
             base_config=DataConfig(local_files_only=True, prompt_from_task=True),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
-        batch_size=32,
-        num_train_steps=50_000,
+        weight_loader=weight_loaders.CheckpointWeightLoader("/home/wzh/dsrl_pi0/openpi/openpi-assets/checkpoints/pi0_base/params"),
+        batch_size=8,
+        num_train_steps=60_000,
+        save_interval = 5000,
+        keep_period = 5000,
+        log_interval= 1000,
     ),
 
     TrainConfig(

@@ -137,8 +137,7 @@ def main(config_name: str, max_frames: int | None = None):
 
     # 存储时用合并的名字
     merged_name = "-".join(repo_ids)
-    out = Path("/home/wys/openpi/assets/")
-    output_path = out / merged_name
+    output_path = "/home/wys/openpi/assets/pi0_cotrain_libero_robomimic/cotrain"
     print(f"Writing stats to: {output_path}")
     normalize.save(output_path, norm_stats)
 
