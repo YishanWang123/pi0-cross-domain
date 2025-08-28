@@ -6,12 +6,14 @@ source ~/openpi/third_party/robomimic/examples/robomimic/.venv/bin/activate
 # 设置需要运行的 suite / task 和对应 GPU 编号
 # robomimic 这里 suite 就可以理解为 task 名（如 lift / can / square / tool_hang）
 
-# TASKS=("tool_hang" "can" "lift" "square" "transport")
-TASKS=("transport")
-GPUS=(1)
+TASKS=("lift" "can" "square")
+# TASKS=("transport")
+GPUS=(1 2 3)
+# GPUS=(4 5 6)
 # GPUS=(0 1 2 3 4 5)
-# PORTS=(8000 8001 8002 8003 8004)
-PORTS=(8001)
+PORTS=(8000 8001 8002)
+# PORTS=(8003 8004 8005)
+# PORTS=(8001)
 NUM_TRIALS=50
 export XLA_PYTHON_CLIENT_MEM_FRACTION=0.3
 
@@ -25,7 +27,7 @@ do
 
   (
     # 启动 serve_policy.py（后台）
-    CUDA_VISIBLE_DEVICES=$GPU uv run scripts/serve_policy.py --env ROBOMIMIC --port $PORT > logs/server_${TASK}.log 2>&1 &
+    CUDA_VISIBLE_DEVICES=$GPU uv run scripts/serve_policy.py --env ROBOMIMIC --port $PORT > logs/server_${TASK}_lora_2w.log 2>&1 &
     SERVER_PID=$!
 
     # 等待 server 启动
@@ -33,7 +35,7 @@ do
 
     # 启动 robomimic websocket 评测（前台）
     export PYTHONPATH=$PYTHONPATH:$PWD/third_party/robomimic
-    CUDA_VISIBLE_DEVICES=$GPU python examples/robomimic/bi_main.py \
+    CUDA_VISIBLE_DEVICES=$GPU python examples/robomimic/main.py \
         --args.tasks "$TASK" \
         --args.num-trials-per-task $NUM_TRIALS \
         --args.port $PORT

@@ -7,6 +7,7 @@ from typing import Protocol, SupportsIndex, TypeVar
 import jax
 import jax.numpy as jnp
 import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
+from lerobot.common.datasets.lerobot_dataset import MultiLeRobotDataset
 import numpy as np
 import torch
 
@@ -14,6 +15,7 @@ import openpi.models.model as _model
 import openpi.training.config as _config
 from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
+import pdb
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -126,29 +128,94 @@ class FakeDataset(Dataset):
         return self._num_samples
 
 
-def create_torch_dataset(
-    data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
-) -> Dataset:
-    """Create a dataset for training."""
-    repo_id = data_config.repo_id
-    if repo_id is None:
-        raise ValueError("Repo ID is not set. Cannot create dataset.")
-    if repo_id == "fake":
-        return FakeDataset(model_config, num_samples=1024)
+# def create_torch_dataset(
+#     data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
+# ) -> Dataset:
+#     """Create a dataset for training."""
+#     repo_id = data_config.repo_id
+#     if repo_id is None:
+#         raise ValueError("Repo ID is not set. Cannot create dataset.")
+#     if repo_id == "fake":
+#         return FakeDataset(model_config, num_samples=1024)
 
-    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id)
-    dataset = lerobot_dataset.LeRobotDataset(
-        data_config.repo_id,
+#     dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id)
+#     dataset = lerobot_dataset.LeRobotDataset(
+#         data_config.repo_id,
+#         delta_timestamps={
+#             key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
+#         },
+#     )
+
+#     if data_config.prompt_from_task:
+#         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+
+#     return dataset
+class AddPromptTransform:
+    def __call__(self, data):
+        if "task" in data and "prompt" not in data:
+            data["prompt"] = data["task"]
+        return data
+
+def create_torch_dataset(data_config, action_horizon, model_config):
+    repo = data_config.repo_id
+    if repo is None:
+        raise ValueError("Repo ID is not set.")
+    if repo == "fake":
+        return FakeDataset(model_config, num_samples=1024)
+    # repo = ["LIBERO130_1shot", "ROBOMIMIC_10shot"]
+    # repo = ["LIBERO130_1shot", "LIBERO130_1shot"]
+    print("repo_type:", type(repo))
+    print("repo:", repo)
+    # pdb.set_trace()
+    # -------- 多数据集情况 ----------
+    if isinstance(repo, (list, tuple)):
+        print("多数据集情况")
+        metas = [lerobot_dataset.LeRobotDatasetMetadata(rid) for rid in repo]
+        fps_set = {m.fps for m in metas}
+        print("fps_set:", fps_set)
+        if len(fps_set) != 1:
+            raise ValueError(f"All repos must share the same fps, got {fps_set}.")
+        fps = next(iter(fps_set))
+
+        delta = {
+            key: [t / fps for t in range(action_horizon)]
+            for key in data_config.action_sequence_keys
+        }
+        print("delta:", delta)
+
+        ds = MultiLeRobotDataset(
+            repo_ids=repo,
+            delta_timestamps=delta,
+            # download_videos=False,
+            # video_backend="pyav",
+        )
+        print("ds:")
+
+        # # 强制每个 LeRobotDataset 转换为 torch 格式
+        # for i, d in enumerate(ds._datasets):
+        #     if hasattr(d, "hf_dataset"):
+        #         ds._datasets[i].hf_dataset = d.hf_dataset.with_format("torch")
+                
+
+        # # 👇 关键：一次性 Repack，别再额外叠一个只含 {"prompt": "task"} 的 Repack
+    # 如果需要 prompt_from_task，就补一个 transform
+        if data_config.prompt_from_task:
+            ds = TransformedDataset(ds, [AddPromptTransform()])
+        return ds
+
+    # -------- 单数据集情况 ----------
+    meta = lerobot_dataset.LeRobotDatasetMetadata(repo)
+    ds = lerobot_dataset.LeRobotDataset(
+        repo,
         delta_timestamps={
-            key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
+            key: [t / meta.fps for t in range(action_horizon)]
+            for key in data_config.action_sequence_keys
         },
     )
 
     if data_config.prompt_from_task:
-        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
-
-    return dataset
-
+        ds = TransformedDataset(ds, [_transforms.PromptFromLeRobotTask(meta.tasks)])
+    return ds
 
 def create_rlds_dataset(
     data_config: _config.DataConfig,

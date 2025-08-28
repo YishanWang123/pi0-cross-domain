@@ -8,12 +8,14 @@ to the config assets directory.
 import numpy as np
 import tqdm
 import tyro
-
+from pathlib import Path
 import openpi.models.model as _model
 import openpi.shared.normalize as normalize
 import openpi.training.config as _config
 import openpi.training.data_loader as _data_loader
 import openpi.transforms as transforms
+import dataclasses
+import pdb
 
 
 class RemoveStrings(transforms.DataTransformFn):
@@ -84,33 +86,61 @@ def create_rlds_dataloader(
     return data_loader, num_batches
 
 
+# def main(config_name: str, max_frames: int | None = None):
+#     config = _config.get_config(config_name)
+#     data_config = config.data.create(config.assets_dirs, config.model)
+
+#     if data_config.rlds_data_dir is not None:
+#         data_loader, num_batches = create_rlds_dataloader(
+#             data_config, config.model.action_horizon, config.batch_size, max_frames
+#         )
+#     else:
+#         data_loader, num_batches = create_torch_dataloader(
+#             data_config, config.model.action_horizon, config.batch_size, config.model, max_frames
+#         )
+
+#     keys = ["state", "actions"]
+#     stats = {key: normalize.RunningStats() for key in keys}
+
+#     for batch in tqdm.tqdm(data_loader, total=num_batches, desc="Computing stats"):
+#         for key in keys:
+#             values = np.asarray(batch[key][0])
+#             stats[key].update(values.reshape(-1, values.shape[-1]))
+
+#     norm_stats = {key: stats.get_statistics() for key, stats in stats.items()}
+
+#     output_path = config.assets_dirs / data_config.repo_id
+#     print(f"Writing stats to: {output_path}")
+#     normalize.save(output_path, norm_stats)
+
 def main(config_name: str, max_frames: int | None = None):
     config = _config.get_config(config_name)
     data_config = config.data.create(config.assets_dirs, config.model)
 
-    if data_config.rlds_data_dir is not None:
-        data_loader, num_batches = create_rlds_dataloader(
-            data_config, config.model.action_horizon, config.batch_size, max_frames
-        )
-    else:
-        data_loader, num_batches = create_torch_dataloader(
-            data_config, config.model.action_horizon, config.batch_size, config.model, max_frames
-        )
+    # 支持单个或多个 repo_id
+    repo_ids = data_config.repo_id if isinstance(data_config.repo_id, list) else [data_config.repo_id]
 
     keys = ["state", "actions"]
     stats = {key: normalize.RunningStats() for key in keys}
 
-    for batch in tqdm.tqdm(data_loader, total=num_batches, desc="Computing stats"):
+
+    data_loader, num_batches = create_torch_dataloader(data_config, config.model.action_horizon, config.batch_size, config.model, max_frames)
+
+
+    for batch in tqdm.tqdm(data_loader, total=num_batches, desc=f"Computing stats"):
         for key in keys:
             values = np.asarray(batch[key][0])
             stats[key].update(values.reshape(-1, values.shape[-1]))
 
-    norm_stats = {key: stats.get_statistics() for key, stats in stats.items()}
+    # 最终得到联合的统计量
+    norm_stats = {key: s.get_statistics() for key, s in stats.items()}
 
-    output_path = config.assets_dirs / data_config.repo_id
+    # 存储时用合并的名字
+    merged_name = "-".join(repo_ids)
+    out = Path("/home/wys/openpi/assets/")
+    output_path = out / merged_name
     print(f"Writing stats to: {output_path}")
     normalize.save(output_path, norm_stats)
-
 
 if __name__ == "__main__":
     tyro.cli(main)

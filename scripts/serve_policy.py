@@ -71,9 +71,13 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_fast_droid",
         dir="gs://openpi-assets/checkpoints/pi0_fast_droid",
     ),
+    # EnvMode.ROBOMIMIC: Checkpoint(
+    #     config="pi0_robomimic",
+    #     dir="/mnt/ssd1/data/zh1/pi0/checkpoints/pi0_robomimic_10shot/robomimic_10shot/29999",
+    # ),
     EnvMode.ROBOMIMIC: Checkpoint(
-        config="pi0_robomimic",
-        dir="/home/wzh/openpi/checkpoints/pi0_robomimic_5shot/robomimic_5shot/29999",
+        config="pi0_robomimic_10shot_lora",
+        dir="/mnt/ssd1/data/zh1/pi0/checkpoints/pi0_robomimic_10shot_lora/robomimic_10shot_lora/19999",
     ),
     # EnvMode.LIBERO: Checkpoint(
     #     config="pi0_fast_libero",
@@ -83,6 +87,10 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero",
         dir="/home/wzh/openpi/checkpoints/pi0_libero130_1shot/libero130_1shot/20000",
     ),
+    # EnvMode.LIBERO: Checkpoint(
+    #     config="pi0_libero130_10shot",
+    #     dir="/mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_10shot/pi0_libero130_10shot/29999",
+    # ),
 }
 
 

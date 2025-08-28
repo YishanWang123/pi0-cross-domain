@@ -6,6 +6,7 @@ import dataclasses
 import difflib
 import logging
 import pathlib
+import typing
 from typing import Any, Protocol, TypeAlias
 
 import etils.epath as epath
@@ -63,7 +64,7 @@ class AssetsConfig:
 @dataclasses.dataclass(frozen=True)
 class DataConfig:
     # LeRobot repo id. If None, fake data will be created.
-    repo_id: str | None = None
+    repo_id: str | list[str] | None = None
     # Directory within the assets directory containing the data assets.
     asset_id: str | None = None
     # Contains precomputed normalization stats. If None, normalization will not be performed.
@@ -86,9 +87,10 @@ class DataConfig:
     # LeRobot dataset is using different keys to represent the action.
     action_sequence_keys: Sequence[str] = ("actions",)
 
+    local_files_only: bool = False
+
     # If true, will use the LeRobot dataset task to define the prompt.
     prompt_from_task: bool = False
-
     # Only used for RLDS data loader (ie currently only used for DROID).
     rlds_data_dir: str | None = None
     # Action space for DROID dataset.
@@ -333,6 +335,19 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
         )
+    
+@dataclasses.dataclass(frozen=True)
+class CoTrainLiberoDataConfig(LeRobotLiberoDataConfig):
+    repo_ids: str = "LIBERO130_1shot,ROBOMIMIC_10shot"
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        base = super().create(assets_dirs, model_config)
+        repo_ids = self.repo_ids
+        print("repo_ids:", repo_ids, type(repo_ids))
+        if isinstance(repo_ids, str):   # ✅ 只有字符串才 split
+            repo_ids = [x.strip() for x in repo_ids.split(",")]
+        return dataclasses.replace(base, repo_id=repo_ids)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -419,7 +434,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "./checkpoints"
+    checkpoint_base_dir: str = "/data0/pi0"
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -573,6 +588,51 @@ _CONFIGS = [
         # Check the base TrainConfig class for a full list of available hyperparameters.
         num_train_steps=30_000,
     ),
+
+    ###co-train部分
+    TrainConfig(
+        name="pi0_cotrain_libero_robomimic",
+        model=pi0.Pi0Config(),
+        # 关键：用薄封装，把两个 repo 作为列表喂进去
+        data=CoTrainLiberoDataConfig(
+            repo_ids=["LIBERO130_1shot", "ROBOMIMIC_10shot"],
+            base_config=DataConfig(local_files_only=True, prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        batch_size=32,
+        num_train_steps=50_000,
+    ),
+
+    TrainConfig(
+        # Change the name to reflect your model and dataset.
+        name="pi0_libero130_10shot",
+        # Here you define the model config -- In this example we use pi0 as the model
+        # architecture and perform *full* finetuning. in the examples below we show how to modify
+        # this to perform *low-memory* (LORA) finetuning and use pi0-FAST as an alternative architecture.
+        model=pi0.Pi0Config(),
+        # Here you define the dataset you are training on. In this example we use the Libero
+        # dataset. For your own dataset, you can change the repo_id to point to your dataset.
+        # Also modify the DataConfig to use the new config you made for your dataset above.
+        data=LeRobotLiberoDataConfig(
+            repo_id="LIBERO130_10shot",
+            base_config=DataConfig(
+                # This flag determines whether we load the prompt (i.e. the task instruction) from the
+                # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
+                # a field called ``prompt`` in the input dict. The recommended setting is True.
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+        ),
+        # Here you define which pre-trained checkpoint you want to load to initialize the model.
+        # This should match the model config you chose above -- i.e. in this case we use the pi0 base model.
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
+        # Check the base TrainConfig class for a full list of available hyperparameters.
+        num_train_steps=30_000,
+        save_interval=5000,
+        keep_period=5000,
+        batch_size=32,
+    ),
     TrainConfig(
         # Change the name to reflect your model and dataset.
         name="pi0_robomimic",
@@ -584,7 +644,34 @@ _CONFIGS = [
         # dataset. For your own dataset, you can change the repo_id to point to your dataset.
         # Also modify the DataConfig to use the new config you made for your dataset above.
         data=LeRobotLiberoDataConfig(
-            repo_id="ROBOMIMIC_5shot",
+            repo_id="ROBOMIMIC_10shot",
+            base_config=DataConfig(
+                # This flag determines whether we load the prompt (i.e. the task instruction) from the
+                # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
+                # a field called ``prompt`` in the input dict. The recommended setting is True.
+                prompt_from_task=True,
+                local_files_only=True
+            ),
+        ),
+        # Here you define which pre-trained checkpoint you want to load to initialize the model.
+        # This should match the model config you chose above -- i.e. in this case we use the pi0 base model.
+        weight_loader=weight_loaders.CheckpointWeightLoader("/mnt/ssd1/data/zh1/pi0/checkpoints/pi0_robomimic_10shot/robomimic_10shot/29999/params"),
+        # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
+        # Check the base TrainConfig class for a full list of available hyperparameters.
+        num_train_steps=30_000,
+    ),
+    TrainConfig(
+        # Change the name to reflect your model and dataset.
+        name="pi0_robomimic_10shot_lora",
+        # Here you define the model config -- In this example we use pi0 as the model
+        # architecture and perform *full* finetuning. in the examples below we show how to modify
+        # this to perform *low-memory* (LORA) finetuning and use pi0-FAST as an alternative architecture.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        # Here you define the dataset you are training on. In this example we use the Libero
+        # dataset. For your own dataset, you can change the repo_id to point to your dataset.
+        # Also modify the DataConfig to use the new config you made for your dataset above.
+        data=LeRobotLiberoDataConfig(
+            repo_id="ROBOMIMIC_10shot",
             base_config=DataConfig(
                 # This flag determines whether we load the prompt (i.e. the task instruction) from the
                 # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
@@ -594,10 +681,18 @@ _CONFIGS = [
         ),
         # Here you define which pre-trained checkpoint you want to load to initialize the model.
         # This should match the model config you chose above -- i.e. in this case we use the pi0 base model.
-        weight_loader=weight_loaders.CheckpointWeightLoader("/home/wzh/openpi/checkpoints/pi0_robomimic_5shot/robomimic_5shot/10000/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
         # Check the base TrainConfig class for a full list of available hyperparameters.
-        num_train_steps=30_000,
+        num_train_steps=20_000,
+        save_interval=2000,
+        keep_period=2000,
+        batch_size=32,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
     ),
     TrainConfig(
         name="pi0_libero_low_mem_finetune",

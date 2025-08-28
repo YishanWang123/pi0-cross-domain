@@ -98,7 +98,27 @@ class RepackTransform(DataTransformFn):
 
     def __call__(self, data: DataDict) -> DataDict:
         flat_item = flatten_dict(data)
+        # print(flat_item.keys())
         return jax.tree.map(lambda k: flat_item[k], self.structure)
+    
+    # def __call__(self, data: DataDict) -> DataDict:
+    #     flat_item = flatten_dict(data)
+    #     print("=== original sample ===")
+    #     print(flat_item.keys())
+    #     print(self.structure)
+    #     out = jax.tree.map(lambda k: flat_item[k], self.structure)
+    #     print("=== transformed sample ===")
+    #     print(out.keys())
+    #     # 如果量不大可以直接 print(out)，否则你可以挑几个关键字段看看
+    #     if "prompt" in out:
+    #         print("prompt:", out["prompt"])
+    #     if "actions" in out:
+    #         print("actions shape:", out["actions"].shape)
+    #     import pdb
+    #     # pdb.set_trace()
+    #     return out
+    
+
 
 
 @dataclasses.dataclass(frozen=True)

@@ -45,7 +45,7 @@ class Args:
     #################################################################################################################
     # Utils
     #################################################################################################################
-    video_out_path: str = "data/libero/videos_20step_pick_id_50trials"  # Path to save videos
+    video_out_path: str = "data/libero/videos_2wstep_1shot_50trials"  # Path to save videos
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -235,7 +235,7 @@ def eval_libero(args: Args) -> None:
     }
 
 
-    output_path = pathlib.Path(f"results_{args.task_suite_name}_pick_ids.json")
+    output_path = pathlib.Path(f"results_{args.task_suite_name}_1shot_2w.json")
     if output_path.exists():
         existing = json.loads(output_path.read_text())
         # 防止同一个 suite 重复

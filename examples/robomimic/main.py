@@ -117,7 +117,7 @@ class Args:
     # -----------------------------
     host: str = "0.0.0.0"
     port: int = 8000
-    replan_steps: int = 20
+    replan_steps: int = 4
 
     # -----------------------------
     # robomimic 评测参数
@@ -133,8 +133,8 @@ class Args:
     # 复现 & 输出
     # -----------------------------
     seed: int = 7
-    video_out_path: str = "data/robomimic/videos"
-    result_json_path: str = "results_robomimic_websocket.json"
+    video_out_path: str = "data/robomimic_lora_2w/videos_replan4"
+    result_json_path: str = "results_robomimic_lora.json"
 
 
 # ===============================
@@ -273,7 +273,7 @@ def eval_robomimic(args: Args) -> None:
     }
 
     # 循环结束后写总表，按 task 名归档
-    summary_path = pathlib.Path("results_robomimic_summary.json")
+    summary_path = pathlib.Path("results_robomimic_lora_2w_replan4.json")
     summary = {}
 
     if summary_path.exists():
