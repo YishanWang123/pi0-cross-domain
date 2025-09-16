@@ -1,3 +1,16 @@
+# pi0-cross-domain
+
+This repository extends [openpi](https://github.com/physical-intelligence/openpi) with **cross-domain training capabilities** and additional support for the **robomimic** benchmark.
+
+## What's inside
+
+- **Multi-domain co-training**  
+  Joint training on both **LIBERO** and **robomimic** datasets, enabling policies that generalize across benchmarks(use lerobot multilerbotdataset).
+
+- **Robomimic extensions** 
+  Training and evaluation scripts for robomimic environments, integrated with the π₀ family of models.
+
+
 # openpi
 
 openpi holds open-source models and packages for robotics, published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
