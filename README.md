@@ -1,6 +1,6 @@
 # pi0-cross-domain
 
-This repository extends [openpi](https://github.com/physical-intelligence/openpi) with **cross-domain training capabilities** and additional support for the **robomimic** benchmark.
+This repository extends [openpi](https://github.com/physical-intelligence/openpi) with **cross-domain training capabilities** and additional support for the **robomimic** and the **LIBERO** benchmark.
 
 ## What's inside
 
